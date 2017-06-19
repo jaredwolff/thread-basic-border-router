@@ -1,8 +1,26 @@
 ## Install
 
+This plugin is useful for automatically installing VirtualBox Guest Additions.
+
     vagrant plugin install vagrant-vbguest
 
-## Commands that are run
+## Set everything up
+
+Running the command below should get everything installed
+
+    vagrant up
+
+## Log in to the vagrant box
+
+    vagrant ssh
+
+## Run the border router
+
+    cd /vagrant/
+    chmod 755 ./script/thread_border_router
+    sudo ./script/thread_border_router
+
+## Extras: Commands that are run
 
   # Set the default interface
   sudo sed -i '/Config:NCP:SocketPath "\/dev/i Config:NCP:SocketPath "/dev/ttyACM0"' /etc/wpantund.conf
