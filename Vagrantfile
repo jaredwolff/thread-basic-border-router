@@ -80,7 +80,7 @@ Vagrant.configure("2") do |config|
     make -j4
     sudo make install
 
-    echo "Simple border router setup complete!"
+    echo "Basic Border Bouter setup complete!"
   SHELL
 
 end

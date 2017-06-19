@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 #  Copyright (c) 2017, Nordic Semiconductor
 #  All rights reserved.
@@ -33,14 +33,14 @@
 # Read configuration file.
 ###############################################################################
 
-source /media/sf_shared/server/config/thread_border_router.config
+source ./config/thread_border_router.config
 
 ###############################################################################
 # Init Border Router UART NCP transport.
 ###############################################################################
 
 init_uart_ncp_transport() {
-	stty -F /dev/ttyACM0 115200 cread crtscts
+	stty -F $ncp_interface 115200 cread crtscts
 
 	# Temporary workaround for the Segger JLink driver issue
 	# echo 0 > /sys/devices/platform/soc/3f980000.usb/buspower
@@ -68,6 +68,11 @@ init_nat64() {
 
 	sed -i "/^prefix/s,.*,prefix $prefix_nat96," /etc/tayga.conf
 
+	# delete first
+	sudo ip link del dev nat64
+	sudo killall tayga
+
+	# then create new
 	tayga --mktun
 	ip link set nat64 up
 	sleep 3
@@ -77,11 +82,14 @@ init_nat64() {
 
 	# Assigns an ipv6 addr to the TAYGA interface, used for returning icmp errors
 	ip addr add $prefix_nat48"1" dev nat64
-	ip addr add $prefix_nat48"/64" dev nat64
-	ip addr add $prefix_nat64"1" dev nat64
+	# ip addr add $prefix_nat48"/64" dev nat64
+	# ip addr add $prefix_nat64"1" dev nat64
 
 	ip route add 192.168.255.0/24 dev nat64
 	ip route add $prefix_nat96 dev nat64
+
+	# Make sure this is set. Otherwise no bueno!
+	sudo sed -i 's/^RUN="no"/RUN="yes"/' '/etc/default/tayga'
 }
 
 ###############################################################################
@@ -115,7 +123,7 @@ assign_global_ipv6_addrs() {
 		if [ $prefix_len -lt 63 ]
 		then
 			global_addr=`echo $addr | cut -d"/" -f1`
-			prefix=`/usr/bin/python /usr/local/sbin/create_subnet64.py $global_addr`
+			prefix=`/usr/bin/python ./script/create_subnet64.py $global_addr`
 			sleep 1
 			wpanctl config-gateway $prefix -d
 		fi
@@ -138,16 +146,38 @@ assign_nat64_addrs() {
 ###############################################################################
 
 prepare_network() {
+	# Enable ipfowarding
 	echo 1 > /proc/sys/net/ipv4/conf/all/forwarding
 	echo 1 > /proc/sys/net/ipv6/conf/all/forwarding
 	echo 0 > /proc/sys/net/ipv6/conf/eth0/forwarding
 
+	# Clear the iptables
 	iptables -F
 	iptables -t nat -F
-	iptables -t nat -I POSTROUTING 1 -o eth0 -j MASQUERADE
 
-	tayga -d &
+	# Set NAT to go through eth0
+	iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+
+	# Prep tayga
+	mkdir -p /var/spool/tayga
+
+	# Start the tayga service
+	tayga &
 	sleep 3
+}
+
+prepare_config() {
+	# One time needed only
+
+	# Set the com port
+	if ! grep -q "Config:NCP:SocketPath \"$ncp_interface\"" /etc/wpantund.conf
+	then
+	sudo sed -i "/Config:NCP:SocketPath \"\/dev/i Config:NCP:SocketPath \"$ncp_interface\"" /etc/wpantund.conf
+	fi
+
+	# Drop privleges -- this will prevent wpan0 from being created...
+	# sudo sed -i 's/^#Config:Daemon:PrivDropToUser/Config:Daemon:PrivDropToUser/' /etc/wpantund.conf
+
 }
 
 ###############################################################################
@@ -158,12 +188,15 @@ run() {
 	killall wpantund 2>/dev/null
 	sleep 2
 
-	wpantund -b $ncp_baudrate -d&
+	# Run the daemon
+	wpantund &
 	sleep 2
 
+	# Reset NCP to a working state
 	wpanctl reset
 	sleep 3
 
+	# Set all the network parameters. Usually just set default.
 	wpanctl set Network:Key --data $thread_network_key
 	wpanctl set NCP:Channel $thread_channel
 	wpanctl setprop Network:PANID $thread_panid
@@ -172,6 +205,8 @@ run() {
 
 	timeout=10
 
+
+	# Wait until we're associated
 	while [ `wpanctl getprop NCP:State | cut -d "\"" -f2` != "associated" ] && [ $? -eq 0 ] && [ $timeout -gt 0 ]
 	do
 		timeout=$((timeout-1))
@@ -187,6 +222,7 @@ init_uart_ncp_transport
 init_nat64
 init_dns64
 prepare_network
+prepare_config
 
 while true
 do
