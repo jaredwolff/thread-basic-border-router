@@ -165,9 +165,6 @@ prepare_network() {
 	# Set NAT to go through eth0
 	iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 
-	# Prep tayga
-	mkdir -p /var/spool/tayga
-
 	# Start the tayga service
 	tayga &
 	sleep 3
