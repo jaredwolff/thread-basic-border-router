@@ -63,14 +63,18 @@ clean_nat64() {
 ###############################################################################
 
 init_nat64() {
+	# kill this guy so it doesn't error out
+	sudo killall tayga
+
+	# clean old
 	clean_nat64
+
 	prefix_nat96=$prefix_nat64"/96"
 
 	sed -i "/^prefix/s,.*,prefix $prefix_nat96," /etc/tayga.conf
 
 	# delete first
 	sudo ip link del dev nat64
-	sudo killall tayga
 
 	# then create new
 	tayga --mktun
