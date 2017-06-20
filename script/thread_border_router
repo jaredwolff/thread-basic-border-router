@@ -87,6 +87,9 @@ init_nat64() {
 	# Assigns an ipv6 addr to the TAYGA interface, used for returning icmp errors
 	ip addr add $prefix_nat48"1" dev nat64
 	# ip addr add $prefix_nat48"/64" dev nat64
+
+	# this will prevent pings on the server side using the ipv6 interface
+	# but, it's necessary in order for DNS to work properly
 	ip addr add $prefix_nat64"1" dev nat64
 
 	ip route add 192.168.255.0/24 dev nat64
