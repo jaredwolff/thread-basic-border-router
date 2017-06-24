@@ -1,109 +1,124 @@
+# thread-basic-border-router-example
+
+This repository re-tools what Nordic Semiconductor had created for their [Raspberry
+Pi image](https://github.com/NordicSemiconductor/thread_border_router) and enables anyone with a Nordic nRF52840 development board and a computer to connect as an NCP to Wpantund. Thanks to the included Vagrant file very little is needed on the
+end user side to get going.
+
 ## Install
 
-This plugin is useful for automatically installing VirtualBox Guest Additions.
+**Note:** This plugin is useful for automatically installing VirtualBox Guest Additions.
+I highly recommend you install it.
 
     vagrant plugin install vagrant-vbguest
 
-## Set everything up
+Let's get started:
 
-Running the command below should get everything installed
+1. First, change the serial number for your DK in the `Vagrantfile`. It's located
+on line 51.
+
+    v.customize ["usbfilter", "add", "0",
+      "--target", :id,
+      "--name", "J-Link",
+      "--manufacturer", "SEGGER",
+      "--product", "J-Link",
+      "--serialnumber", "000683767824"]
+
+2. Plug your kit into USB.
+
+3. Program using the NCP firmware as provided in the [Nordic Thread SDK](http://infocenter.nordicsemi.com/index.jsp?topic=%2Fcom.nordic.infocenter.threadsdk.v0.8.0%2Findex.html)
+
+    cd nRF5_SDK_for_Thread_v0/examples/thread/experimental/ncp/pca10056/blank/armgcc
+    make flash ../../../hex/nrf52840_xxaa.hex
+
+4. Run the `vagrant up` command
 
     vagrant up
 
-## Log in to the vagrant box
+5. Log in to the vagrant box
 
     vagrant ssh
 
-## Run the border router
+6. Run the border router
 
     cd /vagrant/
     chmod 755 ./script/thread_border_router
     sudo ./script/thread_border_router
 
-## Extras: Commands that are run
+7. In a separate shell window, you should see a few network interfaces show up
+  once wpantund has initialized. Most important to note that both nat64 and wpan0
+  has been initialized.
 
-  # Set the default interface
-  sudo sed -i '/Config:NCP:SocketPath "\/dev/i Config:NCP:SocketPath "/dev/ttyACM0"' /etc/wpantund.conf
+    vagrant@jessie:~$ /sbin/ifconfig
+    eth0      Link encap:Ethernet  HWaddr 08:00:27:8d:c0:4d  
+              inet addr:10.0.2.15  Bcast:10.0.2.255  Mask:255.255.255.0
+              inet6 addr: fe80::a00:27ff:fe8d:c04d/64 Scope:Link
+              UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+              RX packets:5843 errors:0 dropped:0 overruns:0 frame:0
+              TX packets:5678 errors:0 dropped:0 overruns:0 carrier:0
+              collisions:0 txqueuelen:1000
+              RX bytes:392092 (382.9 KiB)  TX bytes:544621 (531.8 KiB)
 
-  # Setting up forwarding
-  sudo tee /etc/sysctl.d/60-otbr-ip-forward.conf <<EOF
-  net.ipv6.conf.all.forwarding = 1
-  net.ipv4.ip_forward = 1
-  EOF
+    lo        Link encap:Local Loopback  
+              inet addr:127.0.0.1  Mask:255.0.0.0
+              inet6 addr: ::1/128 Scope:Host
+              UP LOOPBACK RUNNING  MTU:65536  Metric:1
+              RX packets:18 errors:0 dropped:0 overruns:0 frame:0
+              TX packets:18 errors:0 dropped:0 overruns:0 carrier:0
+              collisions:0 txqueuelen:0
+              RX bytes:1647 (1.6 KiB)  TX bytes:1647 (1.6 KiB)
 
-  # Make sure ipfowarding is enabled
-  # echo 1 | sudo tee /proc/sys/net/ipv6/conf/all/forwarding
-  # echo 1 | sudo tee /proc/sys/net/ipv4/ip_forward
+    nat64     Link encap:UNSPEC  HWaddr 00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00  
+              inet addr:192.168.255.1  P-t-P:192.168.255.1  Mask:255.255.255.255
+              inet6 addr: 2001:db8:1:ffff::1/128 Scope:Global
+              inet6 addr: 2001:db8:1::1/128 Scope:Global
+              UP POINTOPOINT RUNNING NOARP MULTICAST  MTU:1500  Metric:1
+              RX packets:126 errors:0 dropped:0 overruns:0 frame:0
+              TX packets:126 errors:0 dropped:0 overruns:0 carrier:0
+              collisions:0 txqueuelen:500
+              RX bytes:5922 (5.7 KiB)  TX bytes:8442 (8.2 KiB)
 
-  # Kill tayga
-  sudo killall tayga
+    wpan0     Link encap:UNSPEC  HWaddr 00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00  
+              inet6 addr: fdde:ad00:beef:0:c6e4:f108:a9a6:737a/64 Scope:Global
+              inet6 addr: fdff:cafe:cafe:cafe:f43d:3e29:fcab:e233/64 Scope:Global
+              inet6 addr: fe80::f43d:3e29:fcab:e233/64 Scope:Link
+              UP POINTOPOINT RUNNING NOARP MULTICAST  MTU:1280  Metric:1
+              RX packets:126 errors:0 dropped:0 overruns:0 frame:0
+              TX packets:7 errors:0 dropped:0 overruns:0 carrier:0
+              collisions:0 txqueuelen:500
+              RX bytes:8442 (8.2 KiB)  TX bytes:672 (672.0 B)
 
-  # Set up tayga
-  sudo rm -r /var/spool/tayga
-  sudo mkdir -p /var/spool/tayga/
-  sudo touch /var/spool/tayga/dynamic.map
+8. On a separate development kit, install the CLI example:
 
-  #Remove just in case
-  sudo ip link del dev nat64
+    cd nRF5_SDK_for_Thread_v0/examples/thread/experimental/cli/pca10056/blank/armgcc
+    make flash ../../../hex/nrf52840_xxaa.hex
 
-  sudo tayga --mktun
-  sudo ip link set nat64 up
-  sudo ip addr add 2001:db8:1::1 dev nat64          # replace with your router's address
-  sudo ip addr add 192.168.255.1 dev nat64          # replace with your router's address
-  sudo ip route add 2001:db8:1:ffff::/96 dev nat64  # from tayga.conf
-  sudo ip route add 192.168.255.0/24 dev nat64      # from tayga.conf
+9. Connect to the CLI example using a terminal program. In my case i'm using
+  CoolTerm. (11500 Baudrate)
 
-  sudo sed -i 's/^RUN="no"/RUN="yes"/' '/etc/default/tayga'
+  ![Cool Term](images/coolterm.png)
 
-  sudo tayga
+10. Ping the border router
 
-  sudo echo 1 > /proc/sys/net/ipv4/conf/all/forwarding
-  sudo echo 1 > /proc/sys/net/ipv6/conf/all/forwarding
-  sudo echo 0 > /proc/sys/net/ipv6/conf/eth0/forwarding
+    ping 2001:db8:1:ffff::1
+    > 8 bytes from 2001:db8:1:ffff:0:0:0:1: icmp_seq=1 hlim=64 time=34ms
 
-  sudo iptables -F
-  sudo iptables -t nat -F
-  sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+11. Ping Google's DNS server
 
-  sudo iptables -A FORWARD -i eth0 -o nat64 -m state --state RELATED,ESTABLISHED -j ACCEPT
-  sudo iptables -A FORWARD -i nat64 -o eth0 -j ACCEPT
+    ping 2001:db8:1:ffff:0:0:808:808
+    > 8 bytes from 2001:db8:1:ffff:0:0:808:808: icmp_seq=2 hlim=57 time=43ms
 
-  sudo /etc/init.d/bind9 reload
+## Going further
 
-  # Add this to named.conf.options (http://ipvsix.me/?p=106)
-  #     very simple BIND9 named.conf.options can look like this:
-  #
-  # options {
-  #         directory "/var/cache/bind";
-  #         auth-nxdomain no;
-  #         listen-on-v6 { any; };
-  #         allow-query { any; };
-  #         allow-query-on { 2001:db8:1:ffff::1/128 };
-  #         dns64 2001:db8:1:ffff::/96 {
-  #                 clients { any; };
-  #         };
-  # };
+  I also modified one of Nordic's Cloud CoAP examples to send data to my CoAP
+  server example. Both links are below:
 
-  # To start the daemon set the master key if needed
-  # If working with nordic examples all of that is set to a default value
-  # Network:Name = "OpenThread"
-  # Network:XPANID = 0xDEAD00BEEF00CAFE
-  # Network:Key = [00112233445566778899AABBCCDDEEFF]
-  # NCP:Channel = 11
-  # To get up and running without a fuss do this
-  # sudo wpanctl set Network:PANID 0xabcd
-  # sudo wpanctl attach
+  [nRF52840 Cloud CoAP Example]()
+  [Node + Websockets + Express CoAP Server Example]()
 
-  # Gotta set the gateway and the router
-  #
-  # wpanctl config-gateway  -d
-  # sleep 2
-  # wpanctl add-route 2001:db8:1:ffff::
+## Debugging:
 
-  ping6 2001:db8:1:ffff:0:0:0808:0808
-
-  # cd borderrouter
-  # # Install dependencies
-  # ./script/bootstrap
-  # # Build and install border router and wpantund
-  # ./script/setup
+  Sometimes the NCP and the wpantund script get into a bad state. The best way to
+  handle is to temporarily un-plug USB and re-connect. Normally this would be
+  handled by a GPIO but because we're not using an embedded platform we have to
+  manually restart things. I typically watch the wpantund output reinitialize
+  to confirm everything is going smoothly.

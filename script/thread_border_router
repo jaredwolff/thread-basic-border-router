@@ -179,8 +179,8 @@ prepare_config() {
 	sudo sed -i "/Config:NCP:SocketPath \"\/dev/i Config:NCP:SocketPath \"$ncp_interface\"" /etc/wpantund.conf
 	fi
 
-	# Drop privleges -- this will prevent wpan0 from being created...
-	# sudo sed -i 's/^#Config:Daemon:PrivDropToUser/Config:Daemon:PrivDropToUser/' /etc/wpantund.conf
+	# Prevent drop privleges -- this will prevent wpan0 from being created...
+	sudo sed -i 's/^Config:Daemon:PrivDropToUser/#Config:Daemon:PrivDropToUser/' /etc/wpantund.conf
 
 }
 
